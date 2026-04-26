@@ -35,11 +35,9 @@ water = st.number_input("Water Intake (L)", 0.0, 5.0, 2.0)
 # ==============================
 if st.button("Analyze"):
 
-    avg_vals = df_user.select_dtypes(['float64','int64'
-                                     ]).mean()
+    avg_vals = df_user.select_dtypes(['float64','int64']).mean()
 
     new_user = pd.DataFrame([{
-        'user_id': "new_user",
         'age_first': age,
         'sex_first': sex,
         'bmi_mean': bmi,
@@ -70,26 +68,32 @@ if st.button("Analyze"):
         'water_intake_l_mean': water
     }])
 
-    new_user['data_type'] = "new"
-    df_user['data_type'] = "original"
+    # ==============================
+    # DEFINE FEATURES (IMPORTANT)
+    # ==============================
+    features = [
+        'age_first','sex_first','bmi_mean','smoking_status_first',
+        'avg_heart_rate_mean','avg_heart_rate_std','avg_heart_rate_max',
+        'resting_hr_mean','resting_hr_std',
+        'hrv_mean','hrv_std',
+        'steps_mean','steps_std','calories_burned_mean',
+        'sleep_hours_mean','sleep_hours_std','sleep_efficiency_mean',
+        'spo2_mean','body_temp_c_mean','fatigue_score_mean',
+        'water_intake_l_mean'
+    ]
 
-    new_user = scaler.transform(new_user)
-    df_combined = pd.concat([df_user, new_user], ignore_index=True)
+    # ==============================
+    # SCALE ONLY INPUT (NOT FULL DF)
+    # ==============================
+    X_input = new_user[features]
+    X_scaled = scaler.transform(X_input)
 
-    features = [col for col in df_user.columns 
-                if col not in ['user_id','cardiometabolic_risk_state_max','data_type']]
+    prob = model.predict_proba(X_scaled)[0][1]
+    score = 100 - prob * 100
 
-    X_scaled = df_combined[features]
-
-    probs = model.predict_proba(X_scaled)[:,1]
-
-    df_combined['risk_probability'] = probs
-    df_combined['health_score'] = 100 - (probs * 100)
-
-    user = df_combined[df_combined['data_type']=="new"].iloc[0]
-
-    prob = user['risk_probability']
-
+    # ==============================
+    # CATEGORY
+    # ==============================
     if prob < 0.3:
         category = "Healthy"
     elif prob < 0.7:
@@ -97,8 +101,11 @@ if st.button("Analyze"):
     else:
         category = "High Risk"
 
+    # ==============================
+    # RANKINGS (USE ORIGINAL DATA)
+    # ==============================
     def percentile(col, value, reverse=False):
-        p = (df_combined[col] < value).mean()*100
+        p = (df_user[col] < value).mean()*100
         return 100-p if reverse else p
 
     sleep_rank = percentile('sleep_hours_mean', sleep)
@@ -106,6 +113,9 @@ if st.button("Analyze"):
     water_rank = percentile('water_intake_l_mean', water)
     hr_rank = percentile('avg_heart_rate_mean', hr, reverse=True)
 
+    # ==============================
+    # INSIGHTS
+    # ==============================
     insights = []
     suggestions = []
 
@@ -138,7 +148,7 @@ if st.button("Analyze"):
     # ==============================
     st.subheader("📊 Results")
 
-    st.metric("Health Score", round(user['health_score'],2))
+    st.metric("Health Score", round(score,2))
     st.metric("Risk Category", category)
     st.metric("Risk Probability", round(prob,2))
 
