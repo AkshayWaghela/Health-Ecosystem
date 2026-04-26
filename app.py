@@ -73,13 +73,13 @@ if st.button("Analyze"):
     new_user['data_type'] = "new"
     df_user['data_type'] = "original"
 
+    new_user = scaler.transform(new_user)
     df_combined = pd.concat([df_user, new_user], ignore_index=True)
 
     features = [col for col in df_user.columns 
                 if col not in ['user_id','cardiometabolic_risk_state_max','data_type']]
 
-    X = df_combined[features]
-    X_scaled = scaler.transform(X)
+    X_scaled = df_combined[features]
 
     probs = model.predict_proba(X_scaled)[:,1]
 
