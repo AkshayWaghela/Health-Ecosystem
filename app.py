@@ -7,13 +7,15 @@ import joblib
 # LOAD FILES
 # ==============================
 df_user = pd.read_csv("df_user.csv")
+df_user = df_user.loc[:, ~df_user.columns.str.contains('^Unnamed')]
+
 model = joblib.load("model.pkl")
 scaler = joblib.load("scaler.pkl")
 
-st.title("🧠 Quick Health Risk Check")
+st.title("🧠 Smart Health Risk Predictor")
 
 # ==============================
-# USER INPUTS (ONLY BASIC)
+# USER INPUTS (SIMPLE)
 # ==============================
 age = st.number_input("Age", 10, 100, 25)
 
@@ -31,17 +33,54 @@ sleep = st.number_input("Sleep Hours", 0.0, 12.0, 7.0)
 water = st.number_input("Water Intake (L)", 0.0, 5.0, 2.0)
 
 # ==============================
-# ANALYZE BUTTON
+# SIMILAR USER FUNCTION
+# ==============================
+def get_similar_users(df, age, sex, bmi, smoking):
+
+    df_filtered = df.copy()
+
+    df_filtered = df_filtered[
+        (df_filtered['age_first'] >= age - 5) &
+        (df_filtered['age_first'] <= age + 5)
+    ]
+
+    df_filtered = df_filtered[df_filtered['sex_first'] == sex]
+
+    df_filtered = df_filtered[
+        (df_filtered['bmi_mean'] >= bmi - 2) &
+        (df_filtered['bmi_mean'] <= bmi + 2)
+    ]
+
+    df_filtered = df_filtered[
+        df_filtered['smoking_status_first'] == smoking
+    ]
+
+    return df_filtered
+
+# ==============================
+# ANALYZE
 # ==============================
 if st.button("Analyze"):
 
-    avg_vals = df_user.select_dtypes(['float64','int64']).mean()
+    # Get similar users
+    similar_users = get_similar_users(df_user, age, sex, bmi, smoking)
 
+    if len(similar_users) < 10:
+        similar_users = df_user  # fallback
+
+    avg_vals = similar_users.mean(numeric_only=True)
+
+    # ==============================
+    # CREATE INPUT
+    # ==============================
     new_user = pd.DataFrame([{
         'age_first': age,
         'sex_first': sex,
         'bmi_mean': bmi,
         'smoking_status_first': smoking,
+
+        'family_history_cvd_first': avg_vals['family_history_cvd_first'],
+        'fitness_level_first': avg_vals['fitness_level_first'],
 
         'avg_heart_rate_mean': hr,
         'avg_heart_rate_std': avg_vals['avg_heart_rate_std'],
@@ -69,10 +108,11 @@ if st.button("Analyze"):
     }])
 
     # ==============================
-    # DEFINE FEATURES (IMPORTANT)
+    # FEATURES (STRICT)
     # ==============================
     features = [
         'age_first','sex_first','bmi_mean','smoking_status_first',
+        'family_history_cvd_first','fitness_level_first',
         'avg_heart_rate_mean','avg_heart_rate_std','avg_heart_rate_max',
         'resting_hr_mean','resting_hr_std',
         'hrv_mean','hrv_std',
@@ -83,7 +123,7 @@ if st.button("Analyze"):
     ]
 
     # ==============================
-    # SCALE ONLY INPUT (NOT FULL DF)
+    # MODEL PREDICTION
     # ==============================
     X_input = new_user[features]
     X_scaled = scaler.transform(X_input)
@@ -102,11 +142,11 @@ if st.button("Analyze"):
         category = "High Risk"
 
     # ==============================
-    # RANKINGS (USE ORIGINAL DATA)
+    # RANKINGS (ORIGINAL DATA)
     # ==============================
     def percentile(col, value, reverse=False):
-        p = (df_user[col] < value).mean()*100
-        return 100-p if reverse else p
+        p = (df_user[col] < value).mean() * 100
+        return 100 - p if reverse else p
 
     sleep_rank = percentile('sleep_hours_mean', sleep)
     steps_rank = percentile('steps_mean', steps)
@@ -121,36 +161,36 @@ if st.button("Analyze"):
 
     if hr > 100:
         insights.append("High heart rate")
-        suggestions.append("Reduce stress & add cardio")
+        suggestions.append("Do cardio & manage stress")
 
     if sleep < 6:
         insights.append("Poor sleep")
-        suggestions.append("Sleep 7–8 hours")
+        suggestions.append("Aim for 7–8 hours sleep")
 
     if steps < 5000:
         insights.append("Low activity")
-        suggestions.append("Walk 8k+ steps")
+        suggestions.append("Walk at least 8,000 steps")
 
     if water < 1.5:
         insights.append("Low hydration")
-        suggestions.append("Drink more water")
+        suggestions.append("Drink 2–3L water daily")
 
     if bmi > 25:
         insights.append("High BMI")
-        suggestions.append("Focus on diet")
+        suggestions.append("Improve diet & exercise")
 
     if len(insights) == 0:
         insights.append("Healthy pattern")
-        suggestions.append("Keep it up")
+        suggestions.append("Keep maintaining lifestyle")
 
     # ==============================
     # DISPLAY
     # ==============================
-    st.subheader("📊 Results")
+    st.subheader("📊 Health Report")
 
-    st.metric("Health Score", round(score,2))
+    st.metric("Health Score", round(score, 2))
     st.metric("Risk Category", category)
-    st.metric("Risk Probability", round(prob,2))
+    st.metric("Risk Probability", round(prob, 2))
 
     st.subheader("🏆 Rankings")
     st.write(f"Sleep: {round(sleep_rank,1)} percentile")
