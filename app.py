@@ -164,14 +164,6 @@ if st.button("Analyze"):
         category = "High Risk"
 
     # ==============================
-    # KPI CARDS
-    # ==============================
-    st.subheader("📊 Health Summary")
-    c1, c2, c3 = st.columns(3)
-
-    c1.metric("Health Score", round(score,1))
-    c2.metric("Risk Level", category)
-    c3.metric("Risk %", round(prob*100,1))
 
     # ==============================
     # RANKINGS
