@@ -35,7 +35,8 @@ water = st.number_input("Water Intake (L)", 0.0, 5.0, 2.0)
 # ==============================
 if st.button("Analyze"):
 
-    avg_vals = df_user.mean()
+    avg_vals = df_user.select_dtypes(['float64','int64'
+                                     ]).mean()
 
     new_user = pd.DataFrame([{
         'user_id': "new_user",
