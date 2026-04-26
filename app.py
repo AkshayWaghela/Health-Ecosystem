@@ -198,14 +198,6 @@ if st.button("Analyze"):
 
     # ==============================
     # CHART 2
-    # ==============================
-    profile_df = pd.DataFrame({
-        'Metric': ['Heart Rate','Steps','Sleep','Water'],
-        'Value': [hr, steps/1000, sleep, water]
-    })
-
-    st.subheader("🧭 Your Health Profile")
-    st.bar_chart(profile_df.set_index('Metric'))
 
     # ==============================
     # INSIGHTS
