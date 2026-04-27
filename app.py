@@ -236,3 +236,5 @@ if st.button("Analyze"):
 
     if bmi > 25:
         st.success("Work on weight management through diet & exercise")
+
+new_user.to_csv('new_entry.csv')
