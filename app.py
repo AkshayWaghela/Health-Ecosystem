@@ -1,25 +1,42 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import joblib
+import plotly.graph_objects as go
 
 # ==============================
 # PAGE CONFIG
 # ==============================
-st.set_page_config(page_title="Health AI", layout="wide")
+st.set_page_config(page_title="Health AI", layout="centered")
 
 # ==============================
-# STYLE (HEALTH THEME)
+# MOBILE STYLE CSS
 # ==============================
 st.markdown("""
 <style>
-.main {
-    background-color: #f4f8f6;
+.block-container {
+    max-width: 420px;
+    padding-top: 1rem;
 }
-.stMetric {
-    background-color: #ffffff;
+
+.card {
+    background: white;
     padding: 15px;
-    border-radius: 12px;
+    border-radius: 15px;
+    box-shadow: 0px 2px 8px rgba(0,0,0,0.05);
+    margin-bottom: 15px;
+}
+
+.title {
+    font-size: 22px;
+    font-weight: 600;
+}
+
+.subtitle {
+    color: grey;
+    font-size: 14px;
+}
+
+.center {
     text-align: center;
 }
 </style>
@@ -35,33 +52,32 @@ model = joblib.load("model.pkl")
 scaler = joblib.load("scaler.pkl")
 
 # ==============================
-# TITLE
+# HEADER
 # ==============================
-st.title("🧠 Smart Health Risk Predictor")
-st.write("Quick analysis using wearable-style health inputs")
+st.markdown('<div class="title center">🧠 Health AI</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle center">Quick health check</div>', unsafe_allow_html=True)
 
 # ==============================
-# INPUT UI (HORIZONTAL)
+# INPUT CARD
 # ==============================
-st.subheader("🧾 Enter Your Details")
+st.markdown('<div class="card">', unsafe_allow_html=True)
 
-col1, col2 = st.columns(2)
+age = st.number_input("Age", 10, 100, 25)
+gender = st.selectbox("Gender", ["Male", "Female"])
+sex = 1 if gender == "Male" else 0
 
-with col1:
-    age = st.number_input("Age", 10, 100, 25)
-    bmi = st.number_input("BMI", 10.0, 50.0, 22.0)
-    hr = st.number_input("Heart Rate", 40, 180, 75)
-    sleep = st.number_input("Sleep (hrs)", 0.0, 12.0, 7.0)
+bmi = st.number_input("BMI", 10.0, 50.0, 22.0)
+smoking = st.selectbox("Smoking", ["No", "Yes"])
+smoking = 1 if smoking == "Yes" else 0
 
-with col2:
-    gender = st.selectbox("Gender", ["Male", "Female"])
-    sex = 1 if gender == "Male" else 0
+hr = st.number_input("Heart Rate", 40, 180, 75)
+steps = st.number_input("Steps", 0, 20000, 8000)
+sleep = st.number_input("Sleep Hours", 0.0, 12.0, 7.0)
+water = st.number_input("Water Intake (L)", 0.0, 5.0, 2.0)
 
-    smoking = st.selectbox("Smoking", ["No", "Yes"])
-    smoking = 1 if smoking == "Yes" else 0
+analyze = st.button("Analyze")
 
-    steps = st.number_input("Steps", 0, 20000, 8000)
-    water = st.number_input("Water (L)", 0.0, 5.0, 2.0)
+st.markdown('</div>', unsafe_allow_html=True)
 
 # ==============================
 # SIMILAR USER FUNCTION
@@ -91,18 +107,14 @@ def get_similar_users(df, age, sex, bmi, smoking):
 # ==============================
 # ANALYSIS
 # ==============================
-if st.button("Analyze"):
+if analyze:
 
     similar_users = get_similar_users(df_user, age, sex, bmi, smoking)
-
     if len(similar_users) < 10:
         similar_users = df_user
 
     avg_vals = similar_users.mean(numeric_only=True)
 
-    # ==============================
-    # CREATE INPUT
-    # ==============================
     new_user = pd.DataFrame([{
         'age_first': age,
         'sex_first': sex,
@@ -150,91 +162,92 @@ if st.button("Analyze"):
     ]
 
     # ==============================
-    # PREDICT
+    # MODEL
     # ==============================
     X_scaled = scaler.transform(new_user[features])
     prob = model.predict_proba(X_scaled)[0][1]
     score = 100 - prob*100
 
+    # ==============================
+    # RESULT CARD
+    # ==============================
+    st.markdown('<div class="card center">', unsafe_allow_html=True)
+
+    st.markdown(f"<h2>{round(score,1)}</h2>", unsafe_allow_html=True)
+    st.markdown("Health Score")
+
     if prob < 0.3:
-        category = "Healthy"
+        st.success("Healthy")
     elif prob < 0.7:
-        category = "Moderate Risk"
+        st.warning("Moderate Risk")
     else:
-        category = "High Risk"
+        st.error("High Risk")
+
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # ==============================
+    # GAUGE
+    # ==============================
+    fig_gauge = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=score,
+        gauge={
+            'axis': {'range': [0, 100]},
+            'bar': {'color': "green"},
+            'steps': [
+                {'range': [0, 40], 'color': "#ff4d4d"},
+                {'range': [40, 70], 'color': "#ffa64d"},
+                {'range': [70, 100], 'color': "#66cc66"}
+            ]
+        }
+    ))
+
+    st.plotly_chart(fig_gauge, use_container_width=True)
 
     # ==============================
-    # RANKINGS
+    # RADAR
     # ==============================
-    def percentile(col, value, reverse=False):
-        p = (df_user[col] < value).mean()*100
-        return 100-p if reverse else p
+    radar_data = {
+        "Sleep": sleep/10,
+        "Steps": steps/10000,
+        "Water": water/3,
+        "Heart": 1-(hr/150),
+        "BMI": 1-(bmi/40)
+    }
 
-    sleep_rank = percentile('sleep_hours_mean', sleep)
-    steps_rank = percentile('steps_mean', steps)
-    water_rank = percentile('water_intake_l_mean', water)
-    hr_rank = percentile('avg_heart_rate_mean', hr, reverse=True)
+    categories = list(radar_data.keys())
+    values = list(radar_data.values())
+    values += values[:1]
+    categories += categories[:1]
 
-    # ==============================
-    # CHART 1
-    # ==============================
-    chart_df = pd.DataFrame({
-        'Metric': ['Sleep', 'Steps', 'Water', 'Heart Rate'],
-        'Percentile': [sleep_rank, steps_rank, water_rank, hr_rank]
-    })
+    fig_radar = go.Figure()
+    fig_radar.add_trace(go.Scatterpolar(r=values, theta=categories, fill='toself'))
+    fig_radar.update_layout(polar=dict(radialaxis=dict(range=[0,1])))
 
-    st.subheader("📈 Performance vs Population")
-    st.bar_chart(chart_df.set_index('Metric'))
-
-    # ==============================
-    # CHART 2
+    st.plotly_chart(fig_radar, use_container_width=True)
 
     # ==============================
     # INSIGHTS
     # ==============================
-    st.subheader("🧠 Personalized Insights")
+    st.markdown('<div class="card">', unsafe_allow_html=True)
 
-    def explain(name, val):
-        if val > 80:
-            return f"{name} is excellent."
-        elif val > 60:
-            return f"{name} is above average."
-        elif val > 40:
-            return f"{name} is average."
-        elif val > 20:
-            return f"{name} is below average."
-        else:
-            return f"{name} is poor and needs attention."
-
-    st.write(f"""
-    • Sleep: {explain("Sleep quality", sleep_rank)}  
-    • Activity: {explain("Activity level", steps_rank)}  
-    • Hydration: {explain("Hydration", water_rank)}  
-    • Heart Health: {explain("Heart condition", hr_rank)}  
-
-    Overall, your profile suggests **{category.lower()} health status**.
-    """)
-
-    # ==============================
-    # SUGGESTIONS
-    # ==============================
-    st.subheader("💡 Recommendations")
-
-    if hr > 100:
-        st.success("Improve cardiovascular fitness & reduce stress")
+    st.markdown("### 🧠 Insights")
 
     if sleep < 6:
-        st.success("Aim for 7–8 hours of sleep")
-
+        st.write("• Your sleep is lower than recommended.")
     if steps < 5000:
-        st.success("Increase daily activity to 8,000+ steps")
-
+        st.write("• Activity level is low compared to others.")
     if water < 1.5:
-        st.success("Increase hydration (2–3L daily)")
+        st.write("• Hydration is insufficient.")
+    if hr > 100:
+        st.write("• Heart rate is elevated.")
 
-    if bmi > 25:
-        st.success("Work on weight management through diet & exercise")
+    if sleep >=6 and steps>=5000 and water>=1.5:
+        st.write("• Your overall lifestyle looks balanced.")
 
-new_user.to_csv('new_entry.csv')
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # ==============================
+    # SAVE DATA
+    # ==============================
+    new_user.to_csv("new_entry.csv", mode='a', header=False, index=False)
